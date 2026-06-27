@@ -1,0 +1,6 @@
+streamlit
+supabase
+openai
+python-dotenv
+requests
+notion-client
