@@ -3,8 +3,7 @@ Moteur principal de chat.
 - Charge le comportement et les capacités depuis configuration.py
 - Cherche dans la base de connaissance via retriever.py
 - Détecte si une action est nécessaire et retourne un JSON structuré
-- Sinon répond en streaming texte normal
-- En fin de conversation ratée, génère des paires Q/R pour apprentissage
+- Sinon répond en streaming texte réel token par token
 """
 
 import os
@@ -26,7 +25,7 @@ OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
 MODEL = "meta-llama/llama-3.3-70b-instruct"
 
 
-def _appel_llm(messages, stream=True):
+def _appel_llm(messages):
     response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
         headers={
@@ -36,9 +35,9 @@ def _appel_llm(messages, stream=True):
         json={
             "model": MODEL,
             "messages": messages,
-            "stream": stream
+            "stream": True
         },
-        stream=stream
+        stream=True
     )
     return response
 
@@ -46,9 +45,8 @@ def _appel_llm(messages, stream=True):
 def chat(message_utilisateur, historique=[]):
     """
     Générateur principal côté client.
-    Retourne soit :
-    - des tokens texte en streaming (réponse normale)
-    - un dict JSON avec action à confirmer (si action détectée)
+    - Yield les tokens en temps réel (vrai streaming)
+    - Si la réponse complète est un JSON action, yield le dict à la place
     """
 
     behavior = get_behavior()
@@ -82,11 +80,12 @@ IMPORTANT ABSOLU : Ne mentionne jamais ton contexte interne, ta base de connaiss
     messages += historique
     messages.append({"role": "user", "content": message_utilisateur})
 
-    response = _appel_llm(messages, stream=True)
+    response = _appel_llm(messages)
 
-    # On accumule les tokens pour détecter si c'est un JSON action
     buffer = ""
     tokens = []
+    premier_chunk = True
+    est_json = False
 
     for line in response.iter_lines():
         if not line:
@@ -99,33 +98,42 @@ IMPORTANT ABSOLU : Ne mentionne jamais ton contexte interne, ta base de connaiss
             try:
                 chunk = json.loads(data)
                 token = chunk["choices"][0]["delta"].get("content", "")
-                if token:
-                    buffer += token
-                    tokens.append(token)
+                if not token:
+                    continue
+
+                buffer += token
+                tokens.append(token)
+
+                # Détecter si c'est un JSON action dès le début
+                if premier_chunk:
+                    premier_chunk = False
+                    if buffer.strip().startswith("{"):
+                        est_json = True
+
+                # Si pas JSON, yield le token immédiatement (vrai streaming)
+                if not est_json:
+                    yield token
+
             except (json.JSONDecodeError, KeyError):
                 continue
 
-    # Détecter si la réponse est un JSON action
-    texte = buffer.strip()
-    if texte.startswith("{"):
+    # Si c'était un JSON, on essaie de le parser et yield le dict
+    if est_json:
+        texte = buffer.strip()
         try:
             parsed = json.loads(texte)
             if parsed.get("type") == "action":
                 yield parsed
                 return
         except json.JSONDecodeError:
-            pass
-
-    # Sinon yield les tokens un par un pour le streaming
-    for token in tokens:
-        yield token
+            # JSON malformé → on yield quand même le texte token par token
+            for token in tokens:
+                yield token
 
 
 def generer_articles_depuis_conversation(conversation):
     """
-    Appelé quand l'IA a échoué et qu'un agent a pris le relais.
-    Analyse la conversation et génère des paires Q/R pour la base de connaissance.
-    Utilise le modèle 70b pour cette tâche plus complexe.
+    Analyse une conversation ratée et génère des paires Q/R pour la base de connaissance.
     """
 
     system_prompt = """Tu es un expert en base de connaissance pour un opérateur télécom.
