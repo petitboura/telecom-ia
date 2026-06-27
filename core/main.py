@@ -21,7 +21,7 @@ def get_secret(key):
 
 
 OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
-MODEL = "meta-llama/llama-3.1-8b-instruct"
+MODEL = "meta-llama/llama-3.1-70b-instruct"
 
 MESSAGE_ERREUR = "Désolé, je rencontre un souci technique pour répondre. Merci de réessayer dans un instant."
 
