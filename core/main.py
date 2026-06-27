@@ -39,7 +39,7 @@ def _appel_llm(messages):
             "stream": True
         },
         stream=True,
-        timeout=30
+        timeout=None
     )
 
 
