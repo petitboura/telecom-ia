@@ -34,12 +34,20 @@ def chercher_knowledge(question, nb_resultats=3):
     """
     Vectorise la question et retourne les chunks les plus pertinents
     depuis la base de connaissance.
+    Si l'embedding ou la recherche échoue, retourne une liste vide
+    plutôt que de bloquer la réponse du chat.
     """
-    vecteur = vectoriser(question)
+    try:
+        vecteur = vectoriser(question)
+    except Exception:
+        return []
 
-    resultats = supabase.rpc("recherche_knowledge", {
-        "query_embedding": vecteur,
-        "match_count": nb_resultats
-    }).execute()
+    try:
+        resultats = supabase.rpc("recherche_knowledge", {
+            "query_embedding": vecteur,
+            "match_count": nb_resultats
+        }).execute()
+    except Exception:
+        return []
 
-    return [r["contenu"] for r in resultats.data]
+    return [r["contenu"] for r in (resultats.data or [])]
