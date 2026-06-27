@@ -68,12 +68,11 @@ st.markdown("""
         text-align: right;
         font-family: 'Inter', sans-serif;
         font-size: 0.95rem;
-        box-shadow: 0 2px 6px rgba(212, 0, 0, 0.25);
     }
 
     /* Réponse assistant — gauche, blanc avec bordure subtile */
     .message-assistant {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Lora', serif;
         color: #494848;
         background-color: #FFFFFF;
         padding: 12px 16px;
