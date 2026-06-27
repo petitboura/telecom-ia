@@ -1,9 +1,5 @@
 """
 Face agent — interface Streamlit pour les employés de l'opérateur télécom.
-- Modifier la base de connaissance en chattant
-- Publier et synchroniser via bouton
-- Valider les articles générés automatiquement depuis les conversations ratées
-- Forcer le rechargement du comportement et des capacités
 """
 
 import sys
@@ -16,6 +12,7 @@ import streamlit as st
 import requests
 from configuration import get_behavior, forcer_rechargement
 from supabase import create_client
+from main import generer_articles_depuis_conversation
 
 def get_secret(key):
     try:
@@ -36,28 +33,19 @@ st.set_page_config(page_title="Espace Agent", page_icon="🛠️", layout="wide"
 
 st.markdown("""
     <style>
-    .message-user {
-        background-color: rgba(100, 100, 100, 0.15);
-        padding: 12px 18px;
-        border-radius: 18px;
-        margin: 8px 0;
-        display: inline-block;
-        max-width: 75%;
-        float: right;
-        text-align: right;
-        border: 1px solid rgba(128,128,128,0.2);
+    [data-testid="chatAvatarIcon-user"],
+    [data-testid="chatAvatarIcon-assistant"] {
+        display: none !important;
     }
-    .message-assistant {
-        padding: 10px 4px;
-        margin: 8px 0;
-        max-width: 85%;
-        line-height: 1.7;
+    .stChatMessage {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
     }
-    .clearfix { clear: both; }
     .point-rouge {
         display: inline-block;
-        width: 10px;
-        height: 10px;
+        width: 9px;
+        height: 9px;
         background-color: #e00;
         border-radius: 50%;
         margin-left: 4px;
@@ -81,7 +69,6 @@ with st.sidebar:
     st.title("🛠️ Espace Agent")
     st.markdown("---")
 
-    # Publier et synchroniser la base de connaissance
     st.subheader("Base de connaissance")
     if st.button("🔄 Publier et synchroniser", type="primary", use_container_width=True):
         with st.spinner("Synchronisation en cours..."):
@@ -94,7 +81,6 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Forcer rechargement comportement et capacités
     st.subheader("Comportement et capacités")
     if st.button("🔁 Forcer le rechargement", use_container_width=True):
         with st.spinner("Rechargement..."):
@@ -106,152 +92,190 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Articles en attente de validation
     st.subheader("Articles à valider")
-    pending = supabase.table("pending_articles").select("*").execute()
-    nb_pending = len(pending.data) if pending.data else 0
+    pending_count = supabase.table("pending_articles").select("*").eq("statut", "brouillon").execute()
+    nb_pending = len(pending_count.data) if pending_count.data else 0
     st.metric("En attente", nb_pending)
 
+    st.markdown("---")
+
+    st.subheader("Conversations en attente")
+    conv_count = supabase.table("unanswered_questions").select("*").eq("statut", "en_attente").execute()
+    nb_conv = len(conv_count.data) if conv_count.data else 0
+    st.metric("En attente", nb_conv)
+
 # --- Tabs ---
-tab_chat, tab_validation = st.tabs(["💬 Chat agent", "✅ Validation articles"])
+tab_chat, tab_conversations, tab_validation = st.tabs(["💬 Chat", "👤 Conversations en attente", "✅ Validation articles"])
 
 # -----------------------------------------------------------------------
 # TAB 1 — Chat agent
 # -----------------------------------------------------------------------
 with tab_chat:
     if len(st.session_state.messages_agent) == 0:
-        st.markdown("### Gérez la base de connaissance en chattant")
-        st.caption("Exemples : 'Ajoute un article sur la résiliation', 'Modifie le délai de portabilité à 5 jours', 'Montre-moi les articles sur la facturation'")
+        st.title("🛠️ Espace Agent")
+        st.caption("Gérez la base de connaissance en chattant.")
 
-    # Affichage historique
     for message in st.session_state.messages_agent:
-        if message["role"] == "user":
-            st.markdown(
-                f'<div class="message-user">{message["content"]}</div><div class="clearfix"></div>',
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                f'<div class="message-assistant">{message["content"]}</div><div class="clearfix"></div>',
-                unsafe_allow_html=True
-            )
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
 
     if prompt := st.chat_input("Votre instruction..."):
         st.session_state.messages_agent.append({"role": "user", "content": prompt})
-        st.markdown(
-            f'<div class="message-user">{prompt}</div><div class="clearfix"></div>',
-            unsafe_allow_html=True
-        )
+        with st.chat_message("user"):
+            st.write(prompt)
 
-        # System prompt agent
-        system_agent = f"""Tu es un assistant interne pour les agents d'un opérateur télécom.
-Tu gères la base de connaissance de l'IA client.
+        system_agent = """Tu es un assistant interne Ooredoo.
+Tu travailles avec les agents pour gérer la base de connaissance de l'IA client.
+Tu réponds précisément à ce qu'on te demande, rien de plus.
+Tu parles à un collègue, pas à un client — sois direct et efficace.
 
-Tu peux :
-- Ajouter un article : créer une nouvelle entrée dans la base
-- Modifier un article : mettre à jour une entrée existante
-- Archiver un article : le marquer comme obsolète
-- Lister les articles : montrer ce qui existe dans une catégorie
-- Répondre à une question sur la base de connaissance existante
-
-Quand tu dois créer ou modifier un article, retourne un JSON avec ce format exact sans texte autour :
-{{
+Quand tu dois créer ou modifier un article, retourne uniquement ce JSON sans texte autour :
+{
   "type": "article",
-  "action": "creer" ou "modifier" ou "archiver",
+  "action": "creer",
   "categorie": "la catégorie",
   "question": "la question",
   "reponse": "la réponse complète",
   "statut": "brouillon"
-}}
-
-Sinon réponds normalement en texte.
-
-Comportement actuel de l'IA client :
-{get_behavior()}"""
+}"""
 
         messages = [{"role": "system", "content": system_agent}]
         messages += st.session_state.messages_agent[:-1]
         messages.append({"role": "user", "content": prompt})
 
-        placeholder = st.empty()
-        reponse_complete = ""
         buffer = ""
+        reponse_complete = ""
         est_json = False
         premier_chunk = True
 
-        # Point rouge pendant le chargement
-        placeholder.markdown(
-            '<div class="message-assistant"><span class="point-rouge"></span></div><div class="clearfix"></div>',
-            unsafe_allow_html=True
-        )
+        with st.chat_message("assistant"):
+            placeholder = st.empty()
+            placeholder.markdown('<span class="point-rouge"></span>', unsafe_allow_html=True)
 
-        # Streaming
-        response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={"model": MODEL, "messages": messages, "stream": True},
-            stream=True
-        )
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={"model": MODEL, "messages": messages, "stream": True},
+                stream=True
+            )
 
-        for line in response.iter_lines():
-            if not line:
-                continue
-            line = line.decode("utf-8")
-            if line.startswith("data: "):
-                data = line[6:]
-                if data == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(data)
-                    token = chunk["choices"][0]["delta"].get("content", "")
-                    if not token:
-                        continue
-                    buffer += token
-                    if premier_chunk:
-                        premier_chunk = False
-                        if buffer.strip().startswith("{"):
-                            est_json = True
-                    if not est_json:
-                        reponse_complete += token
-                        placeholder.markdown(
-                            f'<div class="message-assistant">{reponse_complete}<span class="point-rouge"></span></div><div class="clearfix"></div>',
-                            unsafe_allow_html=True
-                        )
-                except (json.JSONDecodeError, KeyError):
+            for line in response.iter_lines():
+                if not line:
                     continue
+                line = line.decode("utf-8")
+                if line.startswith("data: "):
+                    data = line[6:]
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                        token = chunk["choices"][0]["delta"].get("content", "")
+                        if not token:
+                            continue
+                        buffer += token
+                        if premier_chunk:
+                            premier_chunk = False
+                            if buffer.strip().startswith("{"):
+                                est_json = True
+                        if not est_json:
+                            reponse_complete += token
+                            placeholder.markdown(
+                                f'{reponse_complete}<span class="point-rouge"></span>',
+                                unsafe_allow_html=True
+                            )
+                    except (json.JSONDecodeError, KeyError):
+                        continue
 
-        # Traitement final — même logique qu'avant
-        if est_json:
-            try:
-                parsed = json.loads(buffer.strip())
-                if parsed.get("type") == "article":
-                    supabase.table("pending_articles").insert({
-                        "categorie": parsed.get("categorie"),
-                        "question": parsed.get("question"),
-                        "reponse": parsed.get("reponse"),
-                        "statut": "brouillon",
-                        "source": "agent"
-                    }).execute()
-                    reponse_complete = f"✅ Article créé en brouillon.\n\n**Question :** {parsed.get('question')}\n\n**Réponse :** {parsed.get('reponse')}\n\nVa dans l'onglet **Validation articles** pour le publier."
-                else:
+            # Traitement final
+            if est_json:
+                try:
+                    parsed = json.loads(buffer.strip())
+                    if parsed.get("type") == "article":
+                        supabase.table("pending_articles").insert({
+                            "categorie": parsed.get("categorie"),
+                            "question": parsed.get("question"),
+                            "reponse": parsed.get("reponse"),
+                            "statut": "brouillon",
+                            "source": "agent"
+                        }).execute()
+                        reponse_complete = f"✅ Article créé en brouillon.\n\n**Question :** {parsed.get('question')}\n\n**Réponse :** {parsed.get('reponse')}\n\nVa dans l'onglet **Validation articles** pour le publier."
+                    else:
+                        reponse_complete = buffer.strip()
+                except json.JSONDecodeError:
                     reponse_complete = buffer.strip()
-            except json.JSONDecodeError:
-                reponse_complete = buffer.strip()
 
-        placeholder.markdown(
-            f'<div class="message-assistant">{reponse_complete}</div><div class="clearfix"></div>',
-            unsafe_allow_html=True
-        )
+            placeholder.write(reponse_complete)
+
         st.session_state.messages_agent.append({
             "role": "assistant",
             "content": reponse_complete
         })
 
 # -----------------------------------------------------------------------
-# TAB 2 — Validation articles
+# TAB 2 — Conversations en attente
+# -----------------------------------------------------------------------
+with tab_conversations:
+    st.markdown("### Conversations clients en attente")
+    st.caption("Le client n'a pas eu de réponse satisfaisante. Répondez directement ici.")
+
+    conversations = supabase.table("unanswered_questions").select("*").eq("statut", "en_attente").order("created_at", desc=True).execute()
+
+    if not conversations.data:
+        st.info("Aucune conversation en attente.")
+    else:
+        for conv in conversations.data:
+            with st.expander(f"💬 Conversation #{conv['id']} — {conv['created_at'][:16]}"):
+                st.markdown("**Historique :**")
+                st.text(conv["conversation"])
+                st.markdown("---")
+
+                reponse_agent = st.text_area(
+                    "Votre réponse au client :",
+                    key=f"reponse_{conv['id']}",
+                    placeholder="Tapez votre réponse ici..."
+                )
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Envoyer et clore", key=f"send_{conv['id']}"):
+                        if reponse_agent.strip():
+                            # Sauvegarder la réponse agent
+                            conversation_complete = conv["conversation"] + f"\nAgent : {reponse_agent}"
+                            supabase.table("unanswered_questions").update({
+                                "reponse_agent": reponse_agent,
+                                "statut": "traite",
+                                "traite": True
+                            }).eq("id", conv["id"]).execute()
+
+                            # Générer automatiquement des articles depuis la conversation
+                            with st.spinner("Analyse de la conversation..."):
+                                articles = generer_articles_depuis_conversation(conversation_complete)
+                                for article in articles.get("articles", []):
+                                    supabase.table("pending_articles").insert({
+                                        "categorie": article.get("categorie"),
+                                        "question": article.get("question"),
+                                        "reponse": article.get("reponse"),
+                                        "statut": "brouillon",
+                                        "source": "conversation"
+                                    }).execute()
+
+                            st.success(f"Réponse envoyée. {len(articles.get('articles', []))} article(s) générés pour validation.")
+                            st.rerun()
+                        else:
+                            st.warning("Tapez une réponse avant d'envoyer.")
+                with col2:
+                    if st.button("🗑️ Ignorer", key=f"ignore_{conv['id']}"):
+                        supabase.table("unanswered_questions").update({
+                            "statut": "traite",
+                            "traite": True
+                        }).eq("id", conv["id"]).execute()
+                        st.rerun()
+
+# -----------------------------------------------------------------------
+# TAB 3 — Validation articles
 # -----------------------------------------------------------------------
 with tab_validation:
     st.markdown("### Articles en attente de validation")
