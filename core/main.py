@@ -38,8 +38,7 @@ def _appel_llm(messages):
             "messages": messages,
             "stream": True
         },
-        stream=True,
-        timeout=None
+        stream=True
     )
 
 
