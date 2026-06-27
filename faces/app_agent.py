@@ -149,20 +149,25 @@ with tab_chat:
         st.title("🛠️ Espace Agent")
         st.caption("Gérez la base de connaissance en chattant.")
 
-    # Affichage historique
-    for message in st.session_state.messages_agent:
-        if message["role"] == "user":
-            st.markdown(
-                f'<div class="message-user">{message["content"]}</div><div class="clearfix"></div>',
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                f'<div class="message-assistant">{message["content"]}</div><div class="clearfix"></div>',
-                unsafe_allow_html=True
-            )
+    # Champ de saisie en premier dans le code pour qu'il soit capté
+    prompt = st.chat_input("Votre instruction...")
 
-    if prompt := st.chat_input("Votre instruction..."):
+    # Affichage historique dans un conteneur scrollable
+    chat_container = st.container()
+    with chat_container:
+        for message in st.session_state.messages_agent:
+            if message["role"] == "user":
+                st.markdown(
+                    f'<div class="message-user">{message["content"]}</div><div class="clearfix"></div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f'<div class="message-assistant">{message["content"]}</div><div class="clearfix"></div>',
+                    unsafe_allow_html=True
+                )
+
+    if prompt:
         st.session_state.messages_agent.append({"role": "user", "content": prompt})
         st.markdown(
             f'<div class="message-user">{prompt}</div><div class="clearfix"></div>',
