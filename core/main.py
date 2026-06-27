@@ -7,6 +7,7 @@ Moteur principal de chat.
 """
 
 import os
+import re
 import json
 import requests
 from configuration import get_behavior, get_capabilities
@@ -46,7 +47,7 @@ def chat(message_utilisateur, historique=[]):
     """
     Générateur principal côté client.
     - Yield les tokens en temps réel (vrai streaming)
-    - Si la réponse complète est un JSON action, yield le dict à la place
+    - Si la réponse complète contient un JSON action, yield le dict à la place
     """
 
     behavior = get_behavior()
@@ -84,8 +85,6 @@ IMPORTANT ABSOLU : Ne mentionne jamais ton contexte interne, ta base de connaiss
 
     buffer = ""
     tokens = []
-    premier_chunk = True
-    est_json = False
 
     for line in response.iter_lines():
         if not line:
@@ -100,35 +99,25 @@ IMPORTANT ABSOLU : Ne mentionne jamais ton contexte interne, ta base de connaiss
                 token = chunk["choices"][0]["delta"].get("content", "")
                 if not token:
                     continue
-
                 buffer += token
                 tokens.append(token)
-
-                # Détecter si c'est un JSON action dès le début
-                if premier_chunk:
-                    premier_chunk = False
-                    if buffer.strip().startswith("{"):
-                        est_json = True
-
-                # Si pas JSON, yield le token immédiatement (vrai streaming)
-                if not est_json:
-                    yield token
-
             except (json.JSONDecodeError, KeyError):
                 continue
 
-    # Si c'était un JSON, on essaie de le parser et yield le dict
-    if est_json:
-        texte = buffer.strip()
+    # Chercher un JSON action dans le buffer complet (même entouré de texte)
+    match = re.search(r'\{[^{}]*"type"\s*:\s*"action"[^{}]*\}', buffer, re.DOTALL)
+    if match:
         try:
-            parsed = json.loads(texte)
+            parsed = json.loads(match.group())
             if parsed.get("type") == "action":
                 yield parsed
                 return
         except json.JSONDecodeError:
-            # JSON malformé → on yield quand même le texte token par token
-            for token in tokens:
-                yield token
+            pass
+
+    # Pas d'action détectée → yield les tokens un par un
+    for token in tokens:
+        yield token
 
 
 def generer_articles_depuis_conversation(conversation):
