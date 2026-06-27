@@ -1,8 +1,8 @@
 """
 Face client — interface Streamlit pour les clients de l'opérateur télécom.
 - Répond aux questions depuis la base de connaissance
+- Streaming token par token avec point rouge clignotant
 - Détecte les actions et affiche un bouton de confirmation
-- Transfère vers un agent si nécessaire
 """
 
 import sys
@@ -35,6 +35,22 @@ st.markdown("""
         line-height: 1.7;
     }
     .clearfix { clear: both; }
+
+    .point-rouge {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        background-color: #e00;
+        border-radius: 50%;
+        margin-left: 4px;
+        vertical-align: middle;
+        animation: pulse 0.9s infinite;
+    }
+    @keyframes pulse {
+        0%   { opacity: 1;   transform: scale(1); }
+        50%  { opacity: 0.3; transform: scale(0.7); }
+        100% { opacity: 1;   transform: scale(1); }
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -102,14 +118,21 @@ elif prompt := st.chat_input("Posez votre question..."):
     reponse_complete = ""
     action_detectee = None
 
+    # Afficher le point rouge pendant le chargement
+    placeholder.markdown(
+        '<div class="message-assistant"><span class="point-rouge"></span></div><div class="clearfix"></div>',
+        unsafe_allow_html=True
+    )
+
     for token in chat(prompt, historique):
         # Si c'est un dict, c'est une action
         if isinstance(token, dict):
             action_detectee = token
             break
         reponse_complete += token
+        # Streaming token par token avec point rouge à la fin
         placeholder.markdown(
-            f'<div class="message-assistant">{reponse_complete}▌</div><div class="clearfix"></div>',
+            f'<div class="message-assistant">{reponse_complete}<span class="point-rouge"></span></div><div class="clearfix"></div>',
             unsafe_allow_html=True
         )
 
@@ -118,6 +141,7 @@ elif prompt := st.chat_input("Posez votre question..."):
         st.session_state.action_en_attente = action_detectee
         st.rerun()
     else:
+        # Réponse finale sans point rouge
         placeholder.markdown(
             f'<div class="message-assistant">{reponse_complete}</div><div class="clearfix"></div>',
             unsafe_allow_html=True
