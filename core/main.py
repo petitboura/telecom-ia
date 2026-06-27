@@ -63,7 +63,7 @@ def chat(message_utilisateur, historique=None):
     try:
         response = _appel_llm(messages)
         response.raise_for_status()
-    except requests.RequestException:
+    except requests.RequestException as e:
         print("ERREUR:", e)
         yield MESSAGE_ERREUR
         return
