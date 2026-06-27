@@ -40,7 +40,12 @@ def get_texte_page(page_id):
     for block in blocks:
         type_block = block.get("type")
         if type_block in ["paragraph", "bulleted_list_item", "numbered_list_item",
-                          "heading_1", "heading_2", "heading_3"]:
+                          "heading_1", "heading_2", "heading_3",
+                          "toggle", "quote", "callout"]:
+            rich_text = block[type_block].get("rich_text", [])
+            for t in rich_text:
+                texte += t.get("plain_text", "") + "\n"
+        elif type_block == "code":
             rich_text = block[type_block].get("rich_text", [])
             for t in rich_text:
                 texte += t.get("plain_text", "") + "\n"
