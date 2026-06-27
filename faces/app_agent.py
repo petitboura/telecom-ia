@@ -1,5 +1,6 @@
 """
 Face agent — interface Streamlit pour les employés de l'opérateur télécom.
+Style : identique à app_client.py — Lora, bulles à droite, point rouge animé.
 """
 
 import sys
@@ -33,15 +34,48 @@ st.set_page_config(page_title="Espace Agent", page_icon="🛠️", layout="wide"
 
 st.markdown("""
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&display=swap');
+
+    /* Masquer avatars Streamlit */
     [data-testid="chatAvatarIcon-user"],
-    [data-testid="chatAvatarIcon-assistant"] {
+    [data-testid="chatAvatarIcon-assistant"],
+    [data-testid="stChatMessageAvatarContainer"] {
         display: none !important;
     }
     .stChatMessage {
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
+        padding: 0 !important;
     }
+
+    /* Bulle agent — droite */
+    .message-user {
+        background-color: rgba(100, 100, 100, 0.2);
+        color: inherit;
+        padding: 12px 18px;
+        border-radius: 18px;
+        margin: 8px 0;
+        display: inline-block;
+        max-width: 75%;
+        float: right;
+        text-align: right;
+        border: 1px solid rgba(128,128,128,0.3);
+    }
+
+    /* Réponse IA — gauche, Lora */
+    .message-assistant {
+        font-family: 'Lora', serif;
+        color: inherit;
+        padding: 10px 4px;
+        margin: 8px 0;
+        max-width: 85%;
+        line-height: 1.7;
+    }
+
+    .clearfix { clear: both; }
+
+    /* Point rouge animé */
     .point-rouge {
         display: inline-block;
         width: 9px;
@@ -115,14 +149,25 @@ with tab_chat:
         st.title("🛠️ Espace Agent")
         st.caption("Gérez la base de connaissance en chattant.")
 
+    # Affichage historique
     for message in st.session_state.messages_agent:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
+        if message["role"] == "user":
+            st.markdown(
+                f'<div class="message-user">{message["content"]}</div><div class="clearfix"></div>',
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f'<div class="message-assistant">{message["content"]}</div><div class="clearfix"></div>',
+                unsafe_allow_html=True
+            )
 
     if prompt := st.chat_input("Votre instruction..."):
         st.session_state.messages_agent.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.write(prompt)
+        st.markdown(
+            f'<div class="message-user">{prompt}</div><div class="clearfix"></div>',
+            unsafe_allow_html=True
+        )
 
         system_agent = """Tu es un assistant interne Ooredoo.
 Tu travailles avec les agents pour gérer la base de connaissance de l'IA client.
@@ -148,66 +193,71 @@ Quand tu dois créer ou modifier un article, retourne uniquement ce JSON sans te
         est_json = False
         premier_chunk = True
 
-        with st.chat_message("assistant"):
-            placeholder = st.empty()
-            placeholder.markdown('<span class="point-rouge"></span>', unsafe_allow_html=True)
+        placeholder = st.empty()
+        placeholder.markdown(
+            '<div class="message-assistant"><span class="point-rouge"></span></div><div class="clearfix"></div>',
+            unsafe_allow_html=True
+        )
 
-            response = requests.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={"model": MODEL, "messages": messages, "stream": True},
-                stream=True
-            )
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={"model": MODEL, "messages": messages, "stream": True},
+            stream=True
+        )
 
-            for line in response.iter_lines():
-                if not line:
-                    continue
-                line = line.decode("utf-8")
-                if line.startswith("data: "):
-                    data = line[6:]
-                    if data == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data)
-                        token = chunk["choices"][0]["delta"].get("content", "")
-                        if not token:
-                            continue
-                        buffer += token
-                        if premier_chunk:
-                            premier_chunk = False
-                            if buffer.strip().startswith("{"):
-                                est_json = True
-                        if not est_json:
-                            reponse_complete += token
-                            placeholder.markdown(
-                                f'{reponse_complete}<span class="point-rouge"></span>',
-                                unsafe_allow_html=True
-                            )
-                    except (json.JSONDecodeError, KeyError):
-                        continue
-
-            # Traitement final
-            if est_json:
+        for line in response.iter_lines():
+            if not line:
+                continue
+            line = line.decode("utf-8")
+            if line.startswith("data: "):
+                data = line[6:]
+                if data == "[DONE]":
+                    break
                 try:
-                    parsed = json.loads(buffer.strip())
-                    if parsed.get("type") == "article":
-                        supabase.table("pending_articles").insert({
-                            "categorie": parsed.get("categorie"),
-                            "question": parsed.get("question"),
-                            "reponse": parsed.get("reponse"),
-                            "statut": "brouillon",
-                            "source": "agent"
-                        }).execute()
-                        reponse_complete = f"✅ Article créé en brouillon.\n\n**Question :** {parsed.get('question')}\n\n**Réponse :** {parsed.get('reponse')}\n\nVa dans l'onglet **Validation articles** pour le publier."
-                    else:
-                        reponse_complete = buffer.strip()
-                except json.JSONDecodeError:
-                    reponse_complete = buffer.strip()
+                    chunk = json.loads(data)
+                    token = chunk["choices"][0]["delta"].get("content", "")
+                    if not token:
+                        continue
+                    buffer += token
+                    if premier_chunk:
+                        premier_chunk = False
+                        if buffer.strip().startswith("{"):
+                            est_json = True
+                    if not est_json:
+                        reponse_complete += token
+                        placeholder.markdown(
+                            f'<div class="message-assistant">{reponse_complete}<span class="point-rouge"></span></div><div class="clearfix"></div>',
+                            unsafe_allow_html=True
+                        )
+                except (json.JSONDecodeError, KeyError):
+                    continue
 
-            placeholder.write(reponse_complete)
+        # Traitement final
+        if est_json:
+            try:
+                parsed = json.loads(buffer.strip())
+                if parsed.get("type") == "article":
+                    supabase.table("pending_articles").insert({
+                        "categorie": parsed.get("categorie"),
+                        "question": parsed.get("question"),
+                        "reponse": parsed.get("reponse"),
+                        "statut": "brouillon",
+                        "source": "agent"
+                    }).execute()
+                    reponse_complete = f"✅ Article créé en brouillon.\n\n**Question :** {parsed.get('question')}\n\n**Réponse :** {parsed.get('reponse')}\n\nVa dans l'onglet **Validation articles** pour le publier."
+                else:
+                    reponse_complete = buffer.strip()
+            except json.JSONDecodeError:
+                reponse_complete = buffer.strip()
+
+        placeholder.markdown(
+            f'<div class="message-assistant">{reponse_complete}</div><div class="clearfix"></div>',
+            unsafe_allow_html=True
+        )
 
         st.session_state.messages_agent.append({
             "role": "assistant",
@@ -232,7 +282,7 @@ with tab_conversations:
                 st.text(conv["conversation"])
                 st.markdown("---")
 
-                reponse_agent = st.text_area(
+                reponse_agent = st.text_input(
                     "Votre réponse au client :",
                     key=f"reponse_{conv['id']}",
                     placeholder="Tapez votre réponse ici..."
@@ -242,7 +292,6 @@ with tab_conversations:
                 with col1:
                     if st.button("✅ Envoyer et clore", key=f"send_{conv['id']}"):
                         if reponse_agent.strip():
-                            # Sauvegarder la réponse agent
                             conversation_complete = conv["conversation"] + f"\nAgent : {reponse_agent}"
                             supabase.table("unanswered_questions").update({
                                 "reponse_agent": reponse_agent,
@@ -250,7 +299,6 @@ with tab_conversations:
                                 "traite": True
                             }).eq("id", conv["id"]).execute()
 
-                            # Générer automatiquement des articles depuis la conversation
                             with st.spinner("Analyse de la conversation..."):
                                 articles = generer_articles_depuis_conversation(conversation_complete)
                                 for article in articles.get("articles", []):
