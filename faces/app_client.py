@@ -33,7 +33,7 @@ st.markdown("""
     /* Header / titre */
     h1 {
         color: #D40000 !important;
-        font-family: 'Inter', sans-serif !important;
+        font-family: 'Lora', serif;
         font-weight: 600 !important;
     }
 
