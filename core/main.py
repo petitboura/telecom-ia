@@ -22,7 +22,7 @@ def get_secret(key):
 
 
 OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
-MODEL = "openai/gpt-oss-120b"
+MODEL = "openai/gpt-oss-120b:free"
 
 MESSAGE_ERREUR = "Désolé, je rencontre un souci technique pour répondre. Merci de réessayer dans un instant."
 
