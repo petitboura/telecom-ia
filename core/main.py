@@ -8,6 +8,7 @@ Moteur principal de chat — face client uniquement.
 import os
 import json
 import requests
+import logging
 from configuration import get_behavior
 from retriever import chercher_knowledge
 
@@ -64,7 +65,7 @@ def chat(message_utilisateur, historique=None):
         response = _appel_llm(messages)
         response.raise_for_status()
     except requests.RequestException as e:
-        print("ERREUR:", e)
+        logging.error(f"ERREUR API: {e}")
         yield MESSAGE_ERREUR
         return
 
