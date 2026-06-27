@@ -1,8 +1,9 @@
 """
 Face agent — interface Streamlit pour les employés de l'opérateur télécom.
-- Même style que la face client (bulles, streaming, point rouge)
-- Sidebar pour actions admin
-- Validation des articles en attente
+- Modifier la base de connaissance en chattant
+- Publier et synchroniser via bouton
+- Valider les articles générés automatiquement depuis les conversations ratées
+- Forcer le rechargement du comportement et des capacités
 """
 
 import sys
@@ -16,17 +17,16 @@ import requests
 from configuration import get_behavior, forcer_rechargement
 from supabase import create_client
 
-
 def get_secret(key):
     try:
         return st.secrets[key]
     except:
         return os.environ.get(key)
 
-
 OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
 SUPABASE_URL = get_secret("SUPABASE_URL")
 SUPABASE_SECRET = get_secret("SUPABASE_SECRET")
+NOTION_TOKEN = get_secret("NOTION_TOKEN")
 NOTION_PAGE_KNOWLEDGE_ID = get_secret("NOTION_PAGE_KNOWLEDGE_ID")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SECRET)
@@ -54,7 +54,6 @@ st.markdown("""
         line-height: 1.7;
     }
     .clearfix { clear: both; }
-
     .point-rouge {
         display: inline-block;
         width: 10px;
@@ -82,6 +81,7 @@ with st.sidebar:
     st.title("🛠️ Espace Agent")
     st.markdown("---")
 
+    # Publier et synchroniser la base de connaissance
     st.subheader("Base de connaissance")
     if st.button("🔄 Publier et synchroniser", type="primary", use_container_width=True):
         with st.spinner("Synchronisation en cours..."):
@@ -94,6 +94,7 @@ with st.sidebar:
 
     st.markdown("---")
 
+    # Forcer rechargement comportement et capacités
     st.subheader("Comportement et capacités")
     if st.button("🔁 Forcer le rechargement", use_container_width=True):
         with st.spinner("Rechargement..."):
@@ -105,22 +106,22 @@ with st.sidebar:
 
     st.markdown("---")
 
+    # Articles en attente de validation
     st.subheader("Articles à valider")
-    pending = supabase.table("pending_articles").select("*").eq("statut", "brouillon").execute()
+    pending = supabase.table("pending_articles").select("*").execute()
     nb_pending = len(pending.data) if pending.data else 0
     st.metric("En attente", nb_pending)
 
 # --- Tabs ---
-tab_chat, tab_validation = st.tabs(["💬 Chat", "✅ Validation articles"])
+tab_chat, tab_validation = st.tabs(["💬 Chat agent", "✅ Validation articles"])
 
 # -----------------------------------------------------------------------
 # TAB 1 — Chat agent
 # -----------------------------------------------------------------------
 with tab_chat:
-
     if len(st.session_state.messages_agent) == 0:
-        st.title("🛠️ Espace Agent")
-        st.caption("Gérez la base de connaissance en chattant.")
+        st.markdown("### Gérez la base de connaissance en chattant")
+        st.caption("Exemples : 'Ajoute un article sur la résiliation', 'Modifie le délai de portabilité à 5 jours', 'Montre-moi les articles sur la facturation'")
 
     # Affichage historique
     for message in st.session_state.messages_agent:
@@ -142,6 +143,7 @@ with tab_chat:
             unsafe_allow_html=True
         )
 
+        # System prompt agent
         system_agent = f"""Tu es un assistant interne pour les agents d'un opérateur télécom.
 Tu gères la base de connaissance de l'IA client.
 
@@ -183,6 +185,7 @@ Comportement actuel de l'IA client :
             unsafe_allow_html=True
         )
 
+        # Streaming
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -206,25 +209,21 @@ Comportement actuel de l'IA client :
                     token = chunk["choices"][0]["delta"].get("content", "")
                     if not token:
                         continue
-
                     buffer += token
-
                     if premier_chunk:
                         premier_chunk = False
                         if buffer.strip().startswith("{"):
                             est_json = True
-
                     if not est_json:
                         reponse_complete += token
                         placeholder.markdown(
                             f'<div class="message-assistant">{reponse_complete}<span class="point-rouge"></span></div><div class="clearfix"></div>',
                             unsafe_allow_html=True
                         )
-
                 except (json.JSONDecodeError, KeyError):
                     continue
 
-        # Traitement final
+        # Traitement final — même logique qu'avant
         if est_json:
             try:
                 parsed = json.loads(buffer.strip())
@@ -246,7 +245,6 @@ Comportement actuel de l'IA client :
             f'<div class="message-assistant">{reponse_complete}</div><div class="clearfix"></div>',
             unsafe_allow_html=True
         )
-
         st.session_state.messages_agent.append({
             "role": "assistant",
             "content": reponse_complete
@@ -257,7 +255,7 @@ Comportement actuel de l'IA client :
 # -----------------------------------------------------------------------
 with tab_validation:
     st.markdown("### Articles en attente de validation")
-    st.caption("Articles générés automatiquement ou créés via le chat agent.")
+    st.caption("Ces articles ont été générés automatiquement depuis des conversations ratées ou créés via le chat agent.")
 
     pending = supabase.table("pending_articles").select("*").eq("statut", "brouillon").execute()
 
