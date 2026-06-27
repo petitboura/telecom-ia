@@ -23,7 +23,7 @@ def get_secret(key):
 
 
 OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
-MODEL = "meta-llama/llama-3.1-8b-instruct"
+MODEL = "meta-llama/llama-3.3-70b-instruct"
 
 
 def _appel_llm(messages, stream=True):
