@@ -1,5 +1,6 @@
 """
 Face client — interface Streamlit pour les clients de l'opérateur télécom.
+Style : identique au coach maths — bulles à droite, Lora pour l'assistant, point rouge animé.
 """
 
 import sys
@@ -10,7 +11,6 @@ import streamlit as st
 from main import chat
 from actions import executer_action
 from supabase import create_client
-import json
 
 def get_secret(key):
     try:
@@ -26,26 +26,48 @@ st.set_page_config(page_title="Support Client", page_icon="📞", layout="center
 
 st.markdown("""
     <style>
-    /* Cacher les avatars */
+    @import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&display=swap');
+
+    /* Masquer tous les éléments natifs du chat Streamlit */
     [data-testid="chatAvatarIcon-user"],
-    [data-testid="chatAvatarIcon-assistant"] {
+    [data-testid="chatAvatarIcon-assistant"],
+    [data-testid="stChatMessageAvatarContainer"] {
         display: none !important;
-    }
-    /* Bulle utilisateur */
-    [data-testid="chat-message-container"]:has([data-testid="chatAvatarIcon-user"]),
-    div[class*="stChatMessage"]:has(div[data-testid="chatAvatarIcon-user"]) {
-        display: flex;
-        justify-content: flex-end;
     }
     .stChatMessage {
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
+        padding: 0 !important;
     }
-    div[data-testid="stChatMessageContent"] p {
-        margin: 0;
+
+    /* Bulle utilisateur — droite */
+    .message-user {
+        background-color: rgba(100, 100, 100, 0.2);
+        color: inherit;
+        padding: 12px 18px;
+        border-radius: 18px;
+        margin: 8px 0;
+        display: inline-block;
+        max-width: 75%;
+        float: right;
+        text-align: right;
+        border: 1px solid rgba(128,128,128,0.3);
     }
-    /* Point rouge */
+
+    /* Réponse assistant — gauche, police Lora */
+    .message-assistant {
+        font-family: 'Lora', serif;
+        color: inherit;
+        padding: 10px 4px;
+        margin: 8px 0;
+        max-width: 85%;
+        line-height: 1.7;
+    }
+
+    .clearfix { clear: both; }
+
+    /* Point rouge animé */
     .point-rouge {
         display: inline-block;
         width: 9px;
@@ -81,8 +103,16 @@ if len(st.session_state.messages) == 0:
 
 # --- Affichage historique ---
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
+    if message["role"] == "user":
+        st.markdown(
+            f'<div class="message-user">{message["content"]}</div><div class="clearfix"></div>',
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f'<div class="message-assistant">{message["content"]}</div><div class="clearfix"></div>',
+            unsafe_allow_html=True
+        )
 
 # --- Bouton contacter un agent ---
 if st.session_state.ia_a_echoue and not st.session_state.conversation_sauvegardee:
@@ -123,8 +153,10 @@ if st.session_state.action_en_attente:
 elif not st.session_state.conversation_sauvegardee:
     if prompt := st.chat_input("Posez votre question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.write(prompt)
+        st.markdown(
+            f'<div class="message-user">{prompt}</div><div class="clearfix"></div>',
+            unsafe_allow_html=True
+        )
 
         historique = [
             {"role": m["role"], "content": m["content"]}
@@ -134,24 +166,30 @@ elif not st.session_state.conversation_sauvegardee:
         reponse_complete = ""
         action_detectee = None
 
-        with st.chat_message("assistant"):
-            placeholder = st.empty()
-            placeholder.markdown('<span class="point-rouge"></span>', unsafe_allow_html=True)
+        placeholder = st.empty()
+        placeholder.markdown(
+            '<div class="message-assistant"><span class="point-rouge"></span></div><div class="clearfix"></div>',
+            unsafe_allow_html=True
+        )
 
-            for token in chat(prompt, historique):
-                if isinstance(token, dict):
-                    action_detectee = token
-                    break
-                reponse_complete += token
-                placeholder.markdown(
-                    f'{reponse_complete}<span class="point-rouge"></span>',
-                    unsafe_allow_html=True
-                )
+        for token in chat(prompt, historique):
+            if isinstance(token, dict):
+                action_detectee = token
+                break
+            reponse_complete += token
+            placeholder.markdown(
+                f'<div class="message-assistant">{reponse_complete}<span class="point-rouge"></span></div><div class="clearfix"></div>',
+                unsafe_allow_html=True
+            )
 
-            if not action_detectee:
-                placeholder.write(reponse_complete)
+        if not action_detectee:
+            placeholder.markdown(
+                f'<div class="message-assistant">{reponse_complete}</div><div class="clearfix"></div>',
+                unsafe_allow_html=True
+            )
 
         if action_detectee:
+            placeholder.empty()
             st.session_state.action_en_attente = action_detectee
             st.rerun()
         else:
