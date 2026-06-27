@@ -1,0 +1,38 @@
+name: Sync comportement et capacités
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Tous les lundis à 3h du matin
+  workflow_dispatch:       # Déclenchement manuel possible
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Installer les dépendances
+        run: pip install supabase requests
+
+      - name: Sync comportement
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_PAGE_BEHAVIOR_ID: ${{ secrets.NOTION_PAGE_BEHAVIOR_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
+        run: python indexers/index_behavior.py
+
+      - name: Sync capacités
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_PAGE_CAPABILITIES_ID: ${{ secrets.NOTION_PAGE_CAPABILITIES_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
+        run: python indexers/index_capabilities.py
