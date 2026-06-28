@@ -5,4 +5,4 @@ python-dotenv
 requests
 notion-client
 groq
-google-generativeai
+google-genai
