@@ -88,14 +88,16 @@ st.markdown("""
     .clearfix { clear: both; }
 
     /* Zone de saisie */
-    .stChatInput textarea {
+.    stChatInput textarea {
         border: 2px solid #D40000 !important;
         border-radius: 12px !important;
         font-family: 'Inter', sans-serif !important;
-    }
-    .stChatInput textarea:focus {
-        box-shadow: 0 0 0 2px rgba(212,0,0,0.2) !important;
-    }
+        outline: none !important;
+}
+.stChatInput textarea:focus {
+    box-shadow: none !important;
+    outline: none !important;
+}
 
     /* Bouton envoi */
     .stChatInput button {
