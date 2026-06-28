@@ -24,7 +24,7 @@ SUPABASE_SECRET = get_secret("SUPABASE_SECRET")
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SECRET)
-client_google = genai.Client(api_key=GOOGLE_API_KEY)
+client_google = genai.Client(api_key=GOOGLE_API_KEY, http_options={"api_version": "v1"})
 
 HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
