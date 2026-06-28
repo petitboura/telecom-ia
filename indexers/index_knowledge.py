@@ -79,7 +79,7 @@ def get_last_edited_stocke(page_id):
 
 def creer_embedding(texte):
     response = client_google.models.embed_content(
-        model="text-embedding-004",
+        model="gemini-embedding-exp-03-07",
         contents=texte
     )
     return response.embeddings[0].values
