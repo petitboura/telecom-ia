@@ -19,7 +19,7 @@ jobs:
           python-version: '3.11'
 
       - name: Installer les dépendances
-        run: pip install supabase google-generativeai requests
+        run: pip install supabase google-genai requests
 
       - name: Lancer l'indexation
         env:
