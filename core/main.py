@@ -91,6 +91,7 @@ def chat(message_utilisateur, historique=None):
                 max_completion_tokens=1024,
                 stream=True,
                 timeout=120
+                reasoning_effort="none"
             )
             for chunk in completion:
                 token = chunk.choices[0].delta.content or ""
