@@ -4,14 +4,11 @@ Moteur principal de chat — face client uniquement.
 - Cherche dans la base de connaissance via retriever.py
 - Stream la réponse texte token par token, dès qu'elle arrive
 """
-
 import os
-import json
-import requests
 import logging
+from groq import Groq
 from configuration import get_behavior
 from retriever import chercher_knowledge
-
 
 def get_secret(key):
     try:
@@ -20,41 +17,16 @@ def get_secret(key):
     except Exception:
         return os.environ.get(key)
 
-
-OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
 MODEL = "openai/gpt-oss-120b"
-
 MESSAGE_ERREUR = "Désolé, je rencontre un souci technique pour répondre. Merci de réessayer dans un instant."
 
-
-def _appel_llm(messages):
-    return requests.post(
-        url="https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "model": MODEL,
-            "messages": messages,
-            "stream": True
-        },
-        stream=True
-    )
-
-
 def chat(message_utilisateur, historique=None):
-    """
-    Générateur principal côté client.
-    Yield les tokens texte au fur et à mesure qu'ils arrivent du LLM (vrai streaming).
-    """
     if historique is None:
         historique = []
 
     behavior = get_behavior()
     knowledge = chercher_knowledge(message_utilisateur)
     contexte_knowledge = "\n".join(knowledge)
-
     system_prompt = f"{behavior}\n\n{contexte_knowledge}" if contexte_knowledge else behavior
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -62,29 +34,17 @@ def chat(message_utilisateur, historique=None):
     messages.append({"role": "user", "content": message_utilisateur})
 
     try:
-        response = _appel_llm(messages)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        logging.error(f"ERREUR API: {e}")
-        yield MESSAGE_ERREUR
-        return
-
-    try:
-        for line in response.iter_lines():
-            if not line:
-                continue
-            line = line.decode("utf-8")
-            if not line.startswith("data: "):
-                continue
-            data = line[6:]
-            if data == "[DONE]":
-                break
-            try:
-                chunk = json.loads(data)
-                token = chunk["choices"][0]["delta"].get("content", "")
-            except (json.JSONDecodeError, KeyError, IndexError):
-                continue
+        client = Groq(api_key=get_secret("GROQ_API_KEY"))
+        completion = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            max_completion_tokens=1024,
+            stream=True
+        )
+        for chunk in completion:
+            token = chunk.choices[0].delta.content or ""
             if token:
                 yield token
-    except requests.RequestException:
+    except Exception as e:
+        logging.error(f"ERREUR API: {e}")
         yield MESSAGE_ERREUR
