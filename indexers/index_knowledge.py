@@ -8,7 +8,7 @@ Lancé via GitHub Action quotidienne.
 import os
 import requests
 from supabase import create_client
-import google.generativeai as genai
+from google import genai
 
 def get_secret(key):
     try:
@@ -24,7 +24,7 @@ SUPABASE_SECRET = get_secret("SUPABASE_SECRET")
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SECRET)
-genai.configure(api_key=GOOGLE_API_KEY)
+client_google = genai.Client(api_key=GOOGLE_API_KEY)
 
 HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
@@ -78,11 +78,11 @@ def get_last_edited_stocke(page_id):
     return None
 
 def creer_embedding(texte):
-    response = genai.embed_content(
-        model="models/text-embedding-004",
-        content=texte
+    response = client_google.models.embed_content(
+        model="text-embedding-004",
+        contents=texte
     )
-    return response["embedding"]
+    return response.embeddings[0].values
 
 def decouper_texte(texte, taille=500):
     mots = texte.split()
