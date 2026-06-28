@@ -18,7 +18,6 @@ def get_secret(key):
 GROQ_PRIMARY = "openai/gpt-oss-120b"
 GOOGLE_MODEL = "gemini-2.5-flash"
 GROQ_FALLBACKS = [
-    "deepseek-r1-distill-qwen-32b",
     "qwen/qwen3.6-27b",
     "meta-llama/llama-4-scout-17b-16e-instruct",
     "llama-3.3-70b-versatile",
