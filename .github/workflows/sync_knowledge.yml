@@ -1,29 +1,31 @@
-import os
-import requests
-from supabase import create_client
-import google.generativeai as genai
+name: Sync base de connaissance
 
-def get_secret(key):
-    try:
-        import streamlit as st
-        return st.secrets[key]
-    except:
-        return os.environ.get(key)
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Tous les jours à 2h du matin
+  workflow_dispatch:       # Déclenchement manuel possible
 
-NOTION_TOKEN = get_secret("NOTION_TOKEN")
-NOTION_PAGE_KNOWLEDGE_ID = get_secret("NOTION_PAGE_KNOWLEDGE_ID")
-SUPABASE_URL = get_secret("SUPABASE_URL")
-SUPABASE_SECRET = get_secret("SUPABASE_SECRET")
-GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
+jobs:
+  sync:
+    runs-on: ubuntu-latest
 
-supabase = create_client(SUPABASE_URL, SUPABASE_SECRET)
-genai.configure(api_key=GOOGLE_API_KEY)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
 
-# ... tout le reste identique ...
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-def creer_embedding(texte):
-    response = genai.embed_content(
-        model="models/text-embedding-004",
-        content=texte
-    )
-    return response["embedding"]
+      - name: Installer les dépendances
+        run: pip install supabase google-generativeai requests
+
+      - name: Lancer l'indexation
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_PAGE_KNOWLEDGE_ID: ${{ secrets.NOTION_PAGE_KNOWLEDGE_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: python indexers/index_knowledge.py
