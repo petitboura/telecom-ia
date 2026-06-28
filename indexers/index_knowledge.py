@@ -10,6 +10,8 @@ import requests
 from supabase import create_client
 from google import genai
 
+client_google = genai.Client(api_key=GOOGLE_API_KEY)
+
 def get_secret(key):
     try:
         import streamlit as st
@@ -79,7 +81,7 @@ def get_last_edited_stocke(page_id):
 
 def creer_embedding(texte):
     response = client_google.models.embed_content(
-        model="gemini-embedding-exp-03-07",
+        model=model="gemini-embedding-001",
         contents=texte
     )
     return response.embeddings[0].values
