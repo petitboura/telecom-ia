@@ -30,29 +30,7 @@ def chat(message_utilisateur, historique=None):
     messages += historique
     messages.append({"role": "user", "content": message_utilisateur})
 
-    # 1. Gemini en premier
-    try:
-        client_google = genai.Client(api_key=get_secret("GOOGLE_API_KEY"))
-        gemini_messages = [
-            {"role": "user" if m["role"] != "assistant" else "model", "parts": [{"text": m["content"]}]}
-            for m in messages if m["role"] != "system"
-        ]
-        response = client_google.models.generate_content_stream(
-            model=GOOGLE_MODEL,
-            contents=gemini_messages,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                max_output_tokens=1024
-            )
-        )
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
-        return
-    except Exception as e:
-        logging.error(f"ERREUR GEMINI: {e}")
-
-    # 2. Fallback Groq
+    # 1. Groq en premier
     client_groq = Groq(api_key=get_secret("GROQ_API_KEY"))
     for model in GROQ_MODELS:
         try:
@@ -73,5 +51,27 @@ def chat(message_utilisateur, historique=None):
                 continue
             if "timeout" not in str(e).lower():
                 logging.error(f"ERREUR GROQ {model}: {e}")
+
+    # 2. Fallback Gemini
+    try:
+        client_google = genai.Client(api_key=get_secret("GOOGLE_API_KEY"))
+        gemini_messages = [
+            {"role": "user" if m["role"] != "assistant" else "model", "parts": [{"text": m["content"]}]}
+            for m in messages if m["role"] != "system"
+        ]
+        response = client_google.models.generate_content_stream(
+            model=GOOGLE_MODEL,
+            contents=gemini_messages,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                max_output_tokens=1024
+            )
+        )
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
+        return
+    except Exception as e:
+        logging.error(f"ERREUR GEMINI: {e}")
 
     yield MESSAGE_ERREUR
