@@ -84,7 +84,7 @@ def creer_embedding(texte):
     )
     return response.embeddings[0].values
 
-def decouper_texte(texte, taille=500):
+def decouper_texte(texte, taille=200):  # 500 → 200
     mots = texte.split()
     return [" ".join(mots[i:i + taille]) for i in range(0, len(mots), taille)] or [""]
 
