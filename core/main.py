@@ -13,8 +13,9 @@ def get_secret(key):
     except Exception:
         return os.environ.get(key)
 
+GROQ_PRIMARY = "openai/gpt-oss-120b"
 GOOGLE_MODEL = "gemini-2.5-flash"
-GROQ_MODELS = ["openai/gpt-oss-120b", "llama-3.3-70b-versatile"]
+GROQ_FALLBACK = "llama-3.3-70b-versatile"
 MESSAGE_ERREUR = "Désolé, je rencontre un souci technique pour répondre. Merci de réessayer dans un instant."
 
 def chat(message_utilisateur, historique=None):
@@ -30,29 +31,28 @@ def chat(message_utilisateur, historique=None):
     messages += historique
     messages.append({"role": "user", "content": message_utilisateur})
 
-    # 1. Groq en premier
     client_groq = Groq(api_key=get_secret("GROQ_API_KEY"))
-    for model in GROQ_MODELS:
-        try:
-            completion = client_groq.chat.completions.create(
-                model=model,
-                messages=messages,
-                max_completion_tokens=1024,
-                stream=True,
-                timeout=120
-            )
-            for chunk in completion:
-                token = chunk.choices[0].delta.content or ""
-                if token:
-                    yield token
-            return
-        except Exception as e:
-            if "429" in str(e) and model != GROQ_MODELS[-1]:
-                continue
-            if "timeout" not in str(e).lower():
-                logging.error(f"ERREUR GROQ {model}: {e}")
 
-    # 2. Fallback Gemini
+    # 1. GPT-OSS 120B
+    try:
+        completion = client_groq.chat.completions.create(
+            model=GROQ_PRIMARY,
+            messages=messages,
+            max_completion_tokens=1024,
+            stream=True,
+            timeout=120
+        )
+        for chunk in completion:
+            token = chunk.choices[0].delta.content or ""
+            if token:
+                yield token
+        logging.info(f"Réponse via GROQ: {GROQ_PRIMARY}")
+        return
+    except Exception as e:
+        if "timeout" not in str(e).lower():
+            logging.error(f"ERREUR GROQ {GROQ_PRIMARY}: {e}")
+
+    # 2. Gemini 2.5 Flash
     try:
         client_google = genai.Client(api_key=get_secret("GOOGLE_API_KEY"))
         gemini_messages = [
@@ -70,8 +70,28 @@ def chat(message_utilisateur, historique=None):
         for chunk in response:
             if chunk.text:
                 yield chunk.text
+        logging.info("Réponse via GEMINI")
         return
     except Exception as e:
         logging.error(f"ERREUR GEMINI: {e}")
+
+    # 3. Llama 3.3 70B
+    try:
+        completion = client_groq.chat.completions.create(
+            model=GROQ_FALLBACK,
+            messages=messages,
+            max_completion_tokens=1024,
+            stream=True,
+            timeout=120
+        )
+        for chunk in completion:
+            token = chunk.choices[0].delta.content or ""
+            if token:
+                yield token
+        logging.info(f"Réponse via GROQ: {GROQ_FALLBACK}")
+        return
+    except Exception as e:
+        if "timeout" not in str(e).lower():
+            logging.error(f"ERREUR GROQ {GROQ_FALLBACK}: {e}")
 
     yield MESSAGE_ERREUR
