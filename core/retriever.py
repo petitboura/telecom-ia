@@ -21,9 +21,10 @@ client_google = genai.Client(api_key=GOOGLE_API_KEY)
 
 def vectoriser(texte):
     response = client_google.models.embed_content(
-        model="text-embedding-004",
+        model="gemini-embedding-001",
         contents=texte
     )
+    return response.embeddings[0].values
     return response.embeddings[0].values
 
 def chercher_knowledge(question, nb_resultats=3):
