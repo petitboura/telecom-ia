@@ -1,13 +1,9 @@
 """
 Recherche sémantique dans la table knowledge_chunks de Supabase.
-Vectorise la question du client et retourne les chunks les plus pertinents.
 """
-
 import os
-from concurrent.futures import ThreadPoolExecutor
 from supabase import create_client
-import openai
-
+import google.generativeai as genai
 
 def get_secret(key):
     try:
@@ -16,32 +12,25 @@ def get_secret(key):
     except:
         return os.environ.get(key)
 
-
 SUPABASE_URL = get_secret("SUPABASE_URL")
 SUPABASE_SECRET = get_secret("SUPABASE_SECRET")
-OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
+GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SECRET)
-client = openai.OpenAI(api_key=OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1")
-
+genai.configure(api_key=GOOGLE_API_KEY)
 
 def vectoriser(texte):
-    response = client.embeddings.create(model="text-embedding-ada-002", input=texte)
-    return response.data[0].embedding
-
+    response = genai.embed_content(
+        model="models/text-embedding-004",
+        content=texte
+    )
+    return response["embedding"]
 
 def chercher_knowledge(question, nb_resultats=3):
-    """
-    Vectorise la question et retourne les chunks les plus pertinents
-    depuis la base de connaissance.
-    Si l'embedding ou la recherche échoue, retourne une liste vide
-    plutôt que de bloquer la réponse du chat.
-    """
     try:
         vecteur = vectoriser(question)
     except Exception:
         return []
-
     try:
         resultats = supabase.rpc("recherche_knowledge", {
             "query_embedding": vecteur,
@@ -49,5 +38,4 @@ def chercher_knowledge(question, nb_resultats=3):
         }).execute()
     except Exception:
         return []
-
     return [r["contenu"] for r in (resultats.data or [])]
