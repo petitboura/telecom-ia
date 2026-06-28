@@ -5,6 +5,7 @@ from google import genai
 from google.genai import types
 from configuration import get_behavior
 from retriever import chercher_knowledge
+logging.basicConfig(level=logging.INFO)
 
 def get_secret(key):
     try:
