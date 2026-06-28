@@ -33,20 +33,26 @@ def chat(message_utilisateur, historique=None):
     messages += historique
     messages.append({"role": "user", "content": message_utilisateur})
 
-    try:
-        client = Groq(api_key=get_secret("GROQ_API_KEY"))
-        completion = client.chat.completions.create(
-            model=MODEL,
-            messages=messages,
-            max_completion_tokens=1024,
-            stream=True,
-            timeout=60
-        )
-        for chunk in completion:
-            token = chunk.choices[0].delta.content or ""
-            if token:
-                yield token
-    except Exception as e:
-        logging.error(f"ERREUR API: {e}")
-        if "timeout" not in str(e).lower() and "timed out" not in str(e).lower():
-            yield MESSAGE_ERREUR
+    MODELS = ["openai/gpt-oss-120b", "llama-3.3-70b-versatile"]
+    client = Groq(api_key=get_secret("GROQ_API_KEY"))
+
+    for model in MODELS:
+        try:
+            completion = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_completion_tokens=1024,
+                stream=True,
+                timeout=120
+            )
+            for chunk in completion:
+                token = chunk.choices[0].delta.content or ""
+                if token:
+                    yield token
+            break
+        except Exception as e:
+            if "429" in str(e) and model != MODELS[-1]:
+                continue
+            if "timeout" not in str(e).lower():
+                logging.error(f"ERREUR API: {e}")
+                yield MESSAGE_ERREUR
