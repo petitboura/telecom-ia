@@ -10,8 +10,6 @@ import requests
 from supabase import create_client
 from google import genai
 
-client_google = genai.Client(api_key=GOOGLE_API_KEY)
-
 def get_secret(key):
     try:
         import streamlit as st
@@ -26,7 +24,7 @@ SUPABASE_SECRET = get_secret("SUPABASE_SECRET")
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SECRET)
-client_google = genai.Client(api_key=GOOGLE_API_KEY, http_options={"api_version": "v1"})
+client_google = genai.Client(api_key=GOOGLE_API_KEY)
 
 HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
