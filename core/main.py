@@ -39,7 +39,8 @@ def chat(message_utilisateur, historique=None):
             model=MODEL,
             messages=messages,
             max_completion_tokens=1024,
-            stream=True
+            stream=True,
+            timeout=60
         )
         for chunk in completion:
             token = chunk.choices[0].delta.content or ""
@@ -47,4 +48,5 @@ def chat(message_utilisateur, historique=None):
                 yield token
     except Exception as e:
         logging.error(f"ERREUR API: {e}")
-        yield MESSAGE_ERREUR
+        if "timeout" not in str(e).lower() and "timed out" not in str(e).lower():
+            yield MESSAGE_ERREUR
