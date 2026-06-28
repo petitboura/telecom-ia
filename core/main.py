@@ -5,6 +5,7 @@ from google import genai
 from google.genai import types
 from configuration import get_behavior
 from retriever import chercher_knowledge
+
 logging.basicConfig(level=logging.INFO)
 
 def get_secret(key):
@@ -16,7 +17,12 @@ def get_secret(key):
 
 GROQ_PRIMARY = "openai/gpt-oss-120b"
 GOOGLE_MODEL = "gemini-2.5-flash"
-GROQ_FALLBACK = "llama-3.3-70b-versatile"
+GROQ_FALLBACKS = [
+    "deepseek-r1-distill-llama-70b",
+    "qwen-qwq-32b",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "llama-3.3-70b-versatile",
+]
 MESSAGE_ERREUR = "Désolé, je rencontre un souci technique pour répondre. Merci de réessayer dans un instant."
 
 def chat(message_utilisateur, historique=None):
@@ -76,23 +82,25 @@ def chat(message_utilisateur, historique=None):
     except Exception as e:
         logging.error(f"ERREUR GEMINI: {e}")
 
-    # 3. Llama 3.3 70B
-    try:
-        completion = client_groq.chat.completions.create(
-            model=GROQ_FALLBACK,
-            messages=messages,
-            max_completion_tokens=1024,
-            stream=True,
-            timeout=120
-        )
-        for chunk in completion:
-            token = chunk.choices[0].delta.content or ""
-            if token:
-                yield token
-        logging.info(f"Réponse via GROQ: {GROQ_FALLBACK}")
-        return
-    except Exception as e:
-        if "timeout" not in str(e).lower():
-            logging.error(f"ERREUR GROQ {GROQ_FALLBACK}: {e}")
+    # 3-6. Fallbacks Groq
+    for model in GROQ_FALLBACKS:
+        try:
+            completion = client_groq.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_completion_tokens=1024,
+                stream=True,
+                timeout=120
+            )
+            for chunk in completion:
+                token = chunk.choices[0].delta.content or ""
+                if token:
+                    yield token
+            logging.info(f"Réponse via GROQ fallback: {model}")
+            return
+        except Exception as e:
+            if "timeout" not in str(e).lower():
+                logging.error(f"ERREUR GROQ {model}: {e}")
+            continue
 
     yield MESSAGE_ERREUR
