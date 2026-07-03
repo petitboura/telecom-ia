@@ -4,6 +4,7 @@ Face étudiant — interface Streamlit du coach mathématique.
 
 import sys
 import os
+import re
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'core'))
 
 import streamlit as st
@@ -41,6 +42,19 @@ st.markdown("""
     .clearfix { clear: both; }
     </style>
 """, unsafe_allow_html=True)
+
+
+def _normaliser_latex(texte):
+    """
+    Le moteur Markdown de Streamlit traite `\\(`, `\\)`, `\\[`, `\\]` comme des
+    caractères échappés et supprime le backslash avant même que MathJax ne
+    voie le texte. On convertit donc ces délimiteurs LaTeX vers `$ $` et
+    `$$ $$`, que Markdown laisse intacts (le `$` n'a pas de sens spécial
+    pour lui).
+    """
+    texte = re.sub(r'\\\[(.*?)\\\]', r'$$\1$$', texte, flags=re.DOTALL)
+    texte = re.sub(r'\\\((.*?)\\\)', r'$\1$', texte, flags=re.DOTALL)
+    return texte
 
 
 def _typeset_mathjax():
@@ -110,7 +124,8 @@ for message in st.session_state.messages:
     if message["role"] == "user":
         st.markdown(f'<div class="message-user">{message["content"]}</div><div class="clearfix"></div>', unsafe_allow_html=True)
     else:
-        st.markdown(f'<div class="message-assistant">{message["content"]}</div><div class="clearfix"></div>', unsafe_allow_html=True)
+        contenu_affiche = _normaliser_latex(message["content"])
+        st.markdown(f'<div class="message-assistant">{contenu_affiche}</div><div class="clearfix"></div>', unsafe_allow_html=True)
 
 if prompt := st.chat_input("Pose ta question..."):
     st.session_state.compteur += 1
@@ -127,13 +142,15 @@ if prompt := st.chat_input("Pose ta question..."):
 
     for token in chat(prompt, historique):
         reponse_complete += token
+        contenu_affiche = _normaliser_latex(reponse_complete)
         placeholder.markdown(
-            f'<div class="message-assistant">{reponse_complete}🎓</div><div class="clearfix"></div>',
+            f'<div class="message-assistant">{contenu_affiche}🎓</div><div class="clearfix"></div>',
             unsafe_allow_html=True
         )
 
+    contenu_affiche = _normaliser_latex(reponse_complete)
     placeholder.markdown(
-        f'<div class="message-assistant">{reponse_complete}</div><div class="clearfix"></div>',
+        f'<div class="message-assistant">{contenu_affiche}</div><div class="clearfix"></div>',
         unsafe_allow_html=True
     )
 
